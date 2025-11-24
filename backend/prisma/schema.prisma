@@ -1,0 +1,159 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-py"
+  interface = "asyncio"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Race {
+  id          Int      @id @default(autoincrement())
+  
+  // Basic race information
+  race_name   String
+  season      Int
+  round       Int
+  circuit     String
+  circuit_id  String
+  country     String
+  locality    String
+  date        String
+  time        String?
+  url         String?
+  
+  // Driver information
+  driver_id           String
+  driver_code         String?
+  driver_number       String?
+  driver_first_name   String
+  driver_last_name    String
+  driver_nationality  String
+  driver_dob          String
+  driver_url          String
+  
+  // Constructor information
+  constructor_id          String
+  constructor_name        String
+  constructor_nationality String
+  constructor_url         String
+  
+  // Race result information
+  position      Int?
+  position_text String?
+  points        Float   @default(0)
+  grid          Int?
+  laps          Int     @default(0)
+  status        String
+  status_id     Int?
+  
+  // Time information
+  time_millis   Int?
+  time_text     String?
+  
+  // Fastest lap information
+  fastest_lap_rank        Int?
+  fastest_lap_lap         Int?
+  fastest_lap_time        String?
+  fastest_lap_speed       Float?
+  fastest_lap_speed_units String?
+
+  weather_condition    String?  // e.g., "Clear", "Rain", "Overcast", "Partly Cloudy"
+  temperature_celsius  Float?   // Track temperature in Celsius
+  humidity_percent     Float?   // Humidity percentage
+  wind_speed_kmh      Float?   // Wind speed in km/h
+  wind_direction      String?  // Wind direction (N, NE, E, SE, S, SW, W, NW)
+  precipitation_mm    Float?   // Precipitation in mm
+  weather_description String?  // Detailed weather description
+  weather_fetched_at  DateTime?
+  
+  // Relations
+  qualifying  Qualifying?
+  pit_stops   PitStop[]
+  lap_times   LapTime[]
+
+  // Indexes for better performance
+  @@index([season, round])
+  @@index([driver_id])
+  @@index([constructor_id])
+  @@index([position])
+  
+  // Unique constraint to prevent duplicate results
+  @@unique([season, round, driver_id])
+}
+
+model Qualifying {
+  id          Int      @id @default(autoincrement())
+  season      Int
+  round       Int
+  driver_id   String
+  
+  position    Int
+  q1          String?
+  q2          String?
+  q3          String?
+  
+  // Relation back to Race
+  race        Race?    @relation(fields: [season, round, driver_id], references: [season, round, driver_id])
+
+  @@unique([season, round, driver_id])
+  @@index([season, round])
+}
+
+model PitStop {
+  id          Int      @id @default(autoincrement())
+  season      Int
+  round       Int
+  driver_id   String
+  
+  stop        Int
+  lap         Int
+  time        String
+  duration    String
+  duration_millis Int?
+  
+  race        Race?    @relation(fields: [season, round, driver_id], references: [season, round, driver_id])
+
+  @@index([season, round, driver_id])
+  @@unique([season, round, driver_id, stop])
+}
+
+model LapTime {
+  id          Int      @id @default(autoincrement())
+  season      Int
+  round       Int
+  driver_id   String
+  
+  lap         Int
+  position    Int
+  time        String
+  time_millis Int
+  
+  race        Race?    @relation(fields: [season, round, driver_id], references: [season, round, driver_id])
+
+  @@index([season, round, driver_id])
+  @@unique([season, round, driver_id, lap])
+}
+
+model Circuit {
+  id          String   @id // circuit_id
+  name        String
+  location    String
+  country     String
+  lat         Float
+  lng         Float
+  
+  // Metadata
+  type        String?  // Street, Race, Hybrid
+  length_km   Float?
+  turns       Int?
+  
+  // AI Features
+  downforce_level      Int? // 1-5
+  overtaking_difficulty Int? // 1-5
+  tire_stress          Int? // 1-5
+}
