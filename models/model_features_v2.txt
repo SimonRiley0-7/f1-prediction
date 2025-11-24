@@ -1,0 +1,15 @@
+driver_encoded
+constructor_encoded
+circuit_encoded
+grid
+quali_pos
+driver_form
+constructor_form
+grid_penalty
+track_experience
+grid_to_finish_avg
+recent_position_avg
+constructor_position_std
+quali_grid_delta
+improvement_potential
+form_momentum
