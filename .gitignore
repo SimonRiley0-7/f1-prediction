@@ -27,6 +27,7 @@ ENV/
 
 # Data files
 *.csv
+!monza_gp_2025_predictions.csv
 *.pkl
 *.npy
 *.png
