@@ -1,0 +1,39 @@
+
+============================================================
+VERIFYING QUALIFYING & PITSTOP DATA (2010-2025)
+============================================================
+
+Found 327 unique races across 6871 records.
+
+Checking each race...
+
+============================================================
+RESULTS SUMMARY
+============================================================
+Total Unique Races Checked: 327
+Races with Qualifying Data: 327 (100.0%)
+Races with Pitstop Data:    307 (93.9%)
+============================================================
+
+⚠️  MISSING PITSTOP DATA (20 races):
+Note: Some races (e.g. Spa 2021) genuinely have no pitstops.
+  - 2010 R1: Bahrain Grand Prix
+  - 2010 R2: Australian Grand Prix
+  - 2010 R3: Malaysian Grand Prix
+  - 2010 R4: Chinese Grand Prix
+  - 2010 R5: Spanish Grand Prix
+  - 2010 R6: Monaco Grand Prix
+  - 2010 R7: Turkish Grand Prix
+  - 2010 R8: Canadian Grand Prix
+  - 2010 R9: European Grand Prix
+  - 2010 R10: British Grand Prix
+  - 2010 R11: German Grand Prix
+  - 2010 R12: Hungarian Grand Prix
+  - 2010 R13: Belgian Grand Prix
+  - 2010 R14: Italian Grand Prix
+  - 2010 R15: Singapore Grand Prix
+  - 2010 R16: Japanese Grand Prix
+  - 2010 R17: Korean Grand Prix
+  - 2010 R18: Brazilian Grand Prix
+  - 2010 R19: Abu Dhabi Grand Prix
+  - 2021 R12: Belgian Grand Prix

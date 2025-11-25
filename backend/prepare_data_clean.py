@@ -20,26 +20,33 @@ async def prepare_data():
     await db.connect()
     print("✅ Connected to database\n")
     
-    # Fetch race data
-    print("📊 Fetching race data...")
+    # Fetch race data (Expanded range)
+    print("📊 Fetching race data (2010-2025)...")
     races = await db.race.find_many(
-        where={"season": {"gte": 2018}}  # Focus on recent data
+        where={"season": {"gte": 2010}}
     )
     print(f"   Found {len(races)} race records\n")
     
     # Fetch qualifying data
     print("⏱️  Fetching qualifying data...")
     qualifying = await db.qualifying.find_many(
-        where={"season": {"gte": 2018}}
+        where={"season": {"gte": 2010}}
     )
     print(f"   Found {len(qualifying)} qualifying records\n")
     
     # Fetch pit stop data
     print("🛑 Fetching pit stop data...")
     pitstops = await db.pitstop.find_many(
-        where={"season": {"gte": 2018}}
+        where={"season": {"gte": 2010}}
     )
     print(f"   Found {len(pitstops)} pit stop records\n")
+    
+    # Fetch lap time data (New)
+    print("🏎️  Fetching lap time data...")
+    laptimes = await db.laptime.find_many(
+        where={"season": {"gte": 2010}}
+    )
+    print(f"   Found {len(laptimes)} lap time records\n")
     
     await db.disconnect()
     
@@ -67,50 +74,89 @@ async def prepare_data():
         'quali_pos': q.position
     } for q in qualifying])
     
-    # Aggregate pit stops by race/driver
+    # Process Pit Stops
     pitstop_agg = pd.DataFrame([{
         'season': p.season,
         'round': p.round,
         'driver_id': p.driver_id,
-        'stop': p.stop
+        'duration': p.duration_millis
     } for p in pitstops])
     
     if not pitstop_agg.empty:
-        pitstop_counts = pitstop_agg.groupby(['season', 'round', 'driver_id']).size().reset_index(name='num_pit_stops')
+        # Calculate avg pit duration per race/driver
+        pit_stats = pitstop_agg.groupby(['season', 'round', 'driver_id']).agg({
+            'duration': ['count', 'mean']
+        }).reset_index()
+        pit_stats.columns = ['season', 'round', 'driver_id', 'num_pit_stops', 'avg_pit_duration']
+        pit_stats['avg_pit_duration'] = pit_stats['avg_pit_duration'] / 1000.0 # Convert to seconds
     else:
-        pitstop_counts = pd.DataFrame(columns=['season', 'round', 'driver_id', 'num_pit_stops'])
+        pit_stats = pd.DataFrame(columns=['season', 'round', 'driver_id', 'num_pit_stops', 'avg_pit_duration'])
     
+    # Process Lap Times
+    lap_agg = pd.DataFrame([{
+        'season': l.season,
+        'round': l.round,
+        'driver_id': l.driver_id,
+        'time_millis': l.time_millis
+    } for l in laptimes])
+    
+    if not lap_agg.empty:
+        # Calculate race pace stats
+        lap_stats = lap_agg.groupby(['season', 'round', 'driver_id'])['time_millis'].agg(['mean', 'std']).reset_index()
+        lap_stats.columns = ['season', 'round', 'driver_id', 'avg_lap_time_ms', 'lap_std_ms']
+        
+        # Calculate race average lap time (to normalize pace)
+        race_avgs = lap_agg.groupby(['season', 'round'])['time_millis'].mean().reset_index(name='race_avg_ms')
+        lap_stats = lap_stats.merge(race_avgs, on=['season', 'round'])
+        
+        # Pace ratio (lower is better, <1 means faster than average)
+        lap_stats['pace_ratio'] = lap_stats['avg_lap_time_ms'] / lap_stats['race_avg_ms']
+    else:
+        lap_stats = pd.DataFrame(columns=['season', 'round', 'driver_id', 'pace_ratio', 'lap_std_ms'])
+
     # Merge data
     print("🔗 Merging datasets...")
-    df = df_races.merge(
-        df_quali,
-        on=['season', 'round', 'driver_id'],
-        how='left'
-    )
-    
-    df = df.merge(
-        pitstop_counts,
-        on=['season', 'round', 'driver_id'],
-        how='left'
-    )
+    df = df_races.merge(df_quali, on=['season', 'round', 'driver_id'], how='left')
+    df = df.merge(pit_stats, on=['season', 'round', 'driver_id'], how='left')
+    df = df.merge(lap_stats[['season', 'round', 'driver_id', 'pace_ratio', 'lap_std_ms']], 
+                 on=['season', 'round', 'driver_id'], how='left')
     
     # Fill missing values
     df['quali_pos'] = df['quali_pos'].fillna(df['grid'])
     df['num_pit_stops'] = df['num_pit_stops'].fillna(0)
+    df['avg_pit_duration'] = df['avg_pit_duration'].fillna(25.0) # Default pit time
+    df['pace_ratio'] = df['pace_ratio'].fillna(1.05) # Slower than avg default
+    df['lap_std_ms'] = df['lap_std_ms'].fillna(0)
     
     # Feature engineering
-    print("⚙️  Engineering features...")
+    print("⚙️  Engineering advanced features...")
     
-    # Driver form (last 3 races average points)
     df = df.sort_values(['driver_id', 'season', 'round'])
+    
+    # 1. Driver Form (Points)
     df['driver_form'] = df.groupby('driver_id')['points'].transform(
         lambda x: x.rolling(3, min_periods=1).mean().shift(1)
     ).fillna(0)
     
-    # Constructor form
+    # 2. Constructor Form
     df['constructor_form'] = df.groupby('constructor_id')['points'].transform(
         lambda x: x.rolling(3, min_periods=1).mean().shift(1)
     ).fillna(0)
+    
+    # 3. Recent Pace (Rolling avg of pace_ratio)
+    df['recent_pace'] = df.groupby('driver_id')['pace_ratio'].transform(
+        lambda x: x.rolling(3, min_periods=1).mean().shift(1)
+    ).fillna(1.05)
+    
+    # 4. Recent Consistency (Rolling avg of lap_std)
+    df['recent_consistency'] = df.groupby('driver_id')['lap_std_ms'].transform(
+        lambda x: x.rolling(3, min_periods=1).mean().shift(1)
+    ).fillna(0)
+    
+    # 5. Recent Pit Form (Rolling avg of pit duration)
+    df['recent_pit_form'] = df.groupby('driver_id')['avg_pit_duration'].transform(
+        lambda x: x.rolling(3, min_periods=1).mean().shift(1)
+    ).fillna(25.0)
     
     # Grid penalty
     df['grid_penalty'] = df['grid'] - df['quali_pos']
@@ -155,13 +201,13 @@ async def prepare_data():
     print(f"Unique drivers: {df['driver_id'].nunique()}")
     print(f"Unique constructors: {df['constructor_id'].nunique()}")
     print(f"Unique circuits: {df['circuit_id'].nunique()}")
-    print(f"\nFeatures: {list(df.columns)}")
+    print(f"\nNew Features: recent_pace, recent_consistency, recent_pit_form")
     print("="*60)
     
     return df
 
 if __name__ == "__main__":
-    print("F1 Data Preparation Script")
+    print("F1 Data Preparation Script (Enhanced)")
     print("="*60 + "\n")
     asyncio.run(prepare_data())
     print("\n✅ Data preparation complete!")
